@@ -41,8 +41,12 @@ func main() {
 
 	//validate config
 	u, err := url.Parse(c.URL)
-	if err != nil || u.Host == "" {
+	if err != nil {
 		log.Fatal("Invalid URL")
+	}
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		log.Fatal("Invalid host and port")
 	}
 	if u.Path == "" {
 		u.Path = "/write"
@@ -58,20 +62,20 @@ func main() {
 
 	//good to go
 	log.Printf("Using InfluxDB endpoint: %s", u)
-	log.Printf("Current time is %s UTC", time.Now().Format(time.RFC3339))
 
+	success := false
 	lock := sync.Mutex{}
 	entries := []string{}
 
 	send := func() error {
 		body := strings.NewReader(strings.Join(entries, "\n"))
 		if c.DNS != "" {
-			h, p, _ := net.SplitHostPort(u.Host)
-			ips, err := lookup(h, c.DNS)
+			//lookup host every POST
+			ips, err := lookup(host, c.DNS)
 			if err != nil {
 				return fmt.Errorf("Lookup failed: %s", err)
 			}
-			u.Host = ips[0] + ":" + p
+			u.Host = ips[0] + ":" + port
 		}
 		resp, err := http.Post(u.String(), "application/x-www-form-urlencoded", body)
 		if err != nil {
@@ -85,7 +89,11 @@ func main() {
 			}
 			return fmt.Errorf("Response: %d => %s", resp.StatusCode, msg)
 		}
-		log.Printf("Success")
+		//show first success
+		if !success {
+			log.Printf("Success")
+			success = true
+		}
 		//clear once recieved!
 		entries = nil
 		return nil
