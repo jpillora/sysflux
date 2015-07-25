@@ -20,6 +20,8 @@ import (
 
 var VERSION = "0"
 
+const MAX_QUEUED = 10e3
+
 type config struct {
 	URL      string        `help:"InfluxDB URL"`
 	Database string        `help:"InfluxDB database"`
@@ -99,6 +101,9 @@ func main() {
 		if v, err := mem.VirtualMemory(); err == nil {
 			entries = append(entries, fmt.Sprintf("mem_usage%s value=%f %d", tags, v.UsedPercent, t))
 		}
+		if len(entries) > MAX_QUEUED {
+			entries = entries[len(entries)-MAX_QUEUED:]
+		}
 	}
 
 	//send loop
@@ -142,7 +147,7 @@ func lookup(domain, server string) ([]string, error) {
 	if l == 0 {
 		return nil, fmt.Errorf("No answers")
 	}
-	ips := make([]string)
+	ips := make([]string, l)
 	for i, answer := range r.Answer {
 		ans := answer.(*dns.A)
 		ips[i] = ans.A.String()
